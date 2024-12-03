@@ -1403,7 +1403,7 @@
                 </xsl:call-template>
               </xsl:variable>
               <xsl:choose>
-                <xsl:when test="$points-to-service = 'yes' or $function = 'download' or $function = 'offlineAccess' or $function = 'order'">
+              <xsl:when test="$points-to-service = 'yes' or $function = 'download' or $function = 'offlineAccess' or $function = 'order' or $function = 'information'">
                   <dcat:distribution>
                     <dcat:Distribution>
 <!-- Title and description -->
