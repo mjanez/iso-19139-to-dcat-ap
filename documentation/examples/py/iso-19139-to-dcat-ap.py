@@ -15,7 +15,7 @@ XML_URL = "http://some.site/csw?request=GetRecords&service=CSW&version=2.0.2&nam
 
 # The URL or path pointing to the latest version of the XSLT.
 XSL_URL = "https://raw.githubusercontent.com/mjanez/iso-19139-to-dcat-ap/refs/heads/develop/iso-19139-to-dcat-ap.xsl"
-LOCAL_XSL_PATH = "./output/iso19139-to-geodcatap.xsl"
+LOCAL_XSL_PATH = os.path.join(os.path.dirname(__file__), "iso19139-to-geodcatap.xsl")
 
 class XSLTTransformer:
     """Class to handle XSLT transformations using SaxonC.

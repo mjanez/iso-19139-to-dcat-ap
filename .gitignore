@@ -1,0 +1,8 @@
+.vscode
+env
+venv
+.env
+
+# Examples
+output
+documentation/examples/*/iso19139-to-geodcatap.xsl
