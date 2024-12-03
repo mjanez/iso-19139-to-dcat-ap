@@ -1610,7 +1610,7 @@
     </xsl:param>
 
     <xsl:param name="IndividualName">
-      <xsl:value-of select="normalize-space(gmd:individualName/*)"/>
+      <xsl:value-of select="normalize-space(gmd:individualName/gco:CharacterString)"/>
     </xsl:param>
 
     <xsl:param name="IndividualName-FOAF">
