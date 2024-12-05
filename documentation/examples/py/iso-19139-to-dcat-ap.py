@@ -1,21 +1,25 @@
 import os
 import tempfile
 import logging
+import yaml
 from saxonche import PySaxonProcessor
 from rdflib import Graph
 from urllib.request import urlopen, urlretrieve
 import ssl
 
+# Load configuration from YAML file
+config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
+with open(config_path, 'r') as config_file:
+    config = yaml.safe_load(config_file)
+
+# Extract URLs from configuration
+XML_URL = config['xml_url']
+XSL_URL = config['xsl_url']
+LOCAL_XSL_PATH = os.path.join(os.path.dirname(__file__), "iso19139-to-geodcatap.xsl")
+
 # Logging configuration
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger(__name__)
-
-# URL of the XML document to transform
-XML_URL = "http://some.site/csw?request=GetRecords&service=CSW&version=2.0.2&namespace=xmlns%28csw=http://www.opengis.net/cat/csw%29&resultType=results&outputSchema=http://www.isotc211.org/2005/gmd&outputFormat=application/xml&typeNames=csw:Record&elementSetName=full&constraintLanguage=CQL_TEXT&constraint_language_version=1.1.0&maxRecords=10"
-
-# The URL or path pointing to the latest version of the XSLT.
-XSL_URL = "https://raw.githubusercontent.com/mjanez/iso-19139-to-dcat-ap/refs/heads/develop/iso-19139-to-dcat-ap.xsl"
-LOCAL_XSL_PATH = os.path.join(os.path.dirname(__file__), "iso19139-to-geodcatap.xsl")
 
 class XSLTTransformer:
     """Class to handle XSLT transformations using SaxonC.
