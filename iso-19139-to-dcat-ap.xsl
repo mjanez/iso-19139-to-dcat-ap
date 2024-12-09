@@ -1393,7 +1393,7 @@
                 </xsl:call-template>
               </xsl:if>
             </xsl:when>
-<!-- Distributions -->
+            <!-- Distributions -->
             <xsl:when test="$ResourceType = 'dataset' or $ResourceType = 'series'">
               <xsl:variable name="points-to-service">
                 <xsl:call-template name="detect-service">
@@ -1403,10 +1403,10 @@
                 </xsl:call-template>
               </xsl:variable>
               <xsl:choose>
-                <xsl:when test="$points-to-service = 'yes' or $function = 'download' or $function = 'offlineAccess' or $function = 'order'">
+                <xsl:when test="$points-to-service = 'yes' or $function = 'download' or $function = 'offlineAccess' or $function = 'order' or $function = 'information'">
                   <dcat:distribution>
                     <dcat:Distribution>
-<!-- Title and description -->
+                      <!-- Title and description -->
                       <xsl:copy-of select="$TitleAndDescription"/>
 <!-- Access URL -->
 <!--
@@ -1439,15 +1439,26 @@
                         </xsl:otherwise>
                       </xsl:choose>
                       <dcat:accessURL rdf:resource="{$url}"/>
-<!-- Constraints related to access and use -->
+                      <!-- Format and MediaType -->
+                      <xsl:variable name="format-uri">
+                        <xsl:call-template name="EncodingLabelToUri">
+                          <xsl:with-param name="label" select="normalize-space($protocol)"/>
+                        </xsl:call-template>
+                      </xsl:variable>
+                      <xsl:variable name="media-type">
+                        <xsl:call-template name="map-protocol-to-iana">
+                          <xsl:with-param name="protocol" select="normalize-space($protocol)"/>
+                        </xsl:call-template>
+                      </xsl:variable>
+                      <dcat:mediaType rdf:resource="{$media-type}"/>
+                      <dct:format rdf:resource="{$format-uri}"/>
+                      <!-- Constraints related to access and use -->
                       <xsl:copy-of select="$ConstraintsRelatedToAccessAndUse"/>
-<!-- Spatial representation type (tentative) -->
+                      <!-- Spatial representation type (tentative) -->
                       <xsl:if test="$profile = $extended">
                         <xsl:copy-of select="$SpatialRepresentationType"/>
                       </xsl:if>
-<!-- Encoding -->
-                      <xsl:copy-of select="$Encoding"/>
-<!-- Resource character encoding -->
+                      <!-- Resource character encoding -->
                       <xsl:if test="$profile = $extended">
                         <xsl:copy-of select="$ResourceCharacterEncoding"/>
                       </xsl:if>
@@ -1455,7 +1466,7 @@
                   </dcat:distribution>
                 </xsl:when>
                 <xsl:when test="$function = 'information' or $function = 'search'">
-<!-- ?? Should foaf:page be detailed with title, description, etc.? -->
+                  <!-- ?? Should foaf:page be detailed with title, description, etc.? -->
                   <xsl:for-each select="gmd:linkage/gmd:URL">
                     <foaf:page>
                       <foaf:Document rdf:about="{.}">
@@ -1464,7 +1475,7 @@
                     </foaf:page>
                   </xsl:for-each>
                 </xsl:when>
-<!-- ?? Should dcat:landingPage be detailed with title, description, etc.? -->
+                <!-- ?? Should dcat:landingPage be detailed with title, description, etc.? -->
                 <xsl:otherwise>
                   <xsl:for-each select="gmd:linkage/gmd:URL">
                     <dcat:landingPage>
@@ -1610,7 +1621,7 @@
     </xsl:param>
 
     <xsl:param name="IndividualName">
-      <xsl:value-of select="normalize-space(gmd:individualName/*)"/>
+      <xsl:value-of select="normalize-space(gmd:individualName/gco:CharacterString)"/>
     </xsl:param>
 
     <xsl:param name="IndividualName-FOAF">
@@ -3371,41 +3382,38 @@
       <xsl:value-of select="normalize-space(.)"/>
     </xsl:param>
     <xsl:param name="format-uri">
+      <xsl:variable name="uri-from-label">
+        <xsl:call-template name="EncodingLabelToUri">
+          <xsl:with-param name="label" select="normalize-space(.)"/>
+        </xsl:call-template>
+      </xsl:variable>
       <xsl:choose>
-        <xsl:when test="@xlink:href and @xlink:href != ''">
-          <xsl:value-of select="@xlink:href"/>
+        <xsl:when test="string-length(normalize-space($uri-from-label)) > 0">
+          <xsl:value-of select="$uri-from-label"/>
         </xsl:when>
         <xsl:otherwise>
-          <xsl:call-template name="EncodingLabelToUri">
-            <xsl:with-param name="label" select="normalize-space(.)"/>
-          </xsl:call-template>
+          <xsl:value-of select="@xlink:href"/>
         </xsl:otherwise>
       </xsl:choose>
     </xsl:param>
+
+<!-- MediaType -->
+
     <xsl:param name="media-type">
       <xsl:choose>
-        <xsl:when test="$format-uri != ''">
-          <dct:MediaType rdf:about="{$format-uri}"/>
+        <xsl:when test="@xlink:href != ''">
+          <xsl:value-of select="@xlink:href"/>
         </xsl:when>
-        <xsl:when test="$format-label != ''">
-          <dct:MediaType>
-            <rdfs:label><xsl:value-of select="$format-label"/></rdfs:label>
-          </dct:MediaType>
-        </xsl:when>
+        <xsl:otherwise>
+          <xsl:value-of select="normalize-space(.)"/>
+        </xsl:otherwise>
       </xsl:choose>
     </xsl:param>
-    <xsl:choose>
-      <xsl:when test="starts-with($format-uri,$iana-mt)">
-        <dcat:mediaType>
-          <xsl:copy-of select="$media-type"/>
-        </dcat:mediaType>
-      </xsl:when>
-      <xsl:otherwise>
-        <dct:format>
-          <xsl:copy-of select="$media-type"/>
-        </dct:format>
-      </xsl:otherwise>
-    </xsl:choose>
+
+    <!-- Output both dcat:mediaType and dct:format -->
+
+    <dcat:mediaType rdf:resource="{$media-type}"/>
+    <dct:format rdf:resource="{$format-uri}"/>
 <!--
     <dct:format>
       <rdf:Description rdf:about="{$format-uri}">
@@ -4178,21 +4186,22 @@
   </xsl:template>
 
 <!-- Templates for services and distributions pointing to services -->
+<xsl:variable name="service-keywords" select="'request=getcapabilities|rest/services'" />
 
-  <xsl:template name="detect-service">
-    <xsl:param name="function"/>
-    <xsl:param name="protocol"/>
-    <xsl:param name="url"/>
-    <xsl:choose>
-      <xsl:when test="contains(substring-after(translate($url, $uppercase, $lowercase), '?'), 'request=getcapabilities')">
-        <xsl:text>yes</xsl:text>
-      </xsl:when>
-      <xsl:otherwise>
-        <xsl:text>no</xsl:text>
-      </xsl:otherwise>
-    </xsl:choose>
-  </xsl:template>
-
+<xsl:template name="detect-service">
+  <xsl:param name="function"/>
+  <xsl:param name="protocol"/>
+  <xsl:param name="url"/>
+  <xsl:variable name="lowercase-url" select="substring-after(translate($url, $uppercase, $lowercase), '?')" />
+  <xsl:choose>
+    <xsl:when test="matches($lowercase-url, $service-keywords)">
+      <xsl:text>yes</xsl:text>
+    </xsl:when>
+    <xsl:otherwise>
+      <xsl:text>no</xsl:text>
+    </xsl:otherwise>
+  </xsl:choose>
+</xsl:template>
   <xsl:template name="service-protocol-code">
     <xsl:param name="function"/>
     <xsl:param name="protocol"/>
@@ -4334,5 +4343,194 @@
       <dcat:endpointDescription rdf:resource="{$endpoint-description}"/>
     </xsl:if>
   </xsl:template>
+
+<!-- Template for mapping protocols to IANA values (mediaTypes -->
+<xsl:template name="map-protocol-to-iana">
+  <xsl:param name="protocol"/>
+  <xsl:variable name="iana-mt" select="'http://www.iana.org/assignments/media-types/'"/>
+  <xsl:choose>
+    <xsl:when test="$protocol = 'KMZ'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.google-earth.kmz')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'WMS'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.ogc.wms_xml')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'WFS'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.ogc.wfs_xml')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'WCS'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.ogc.wcs_xml')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'SOS'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.ogc.sos_xml')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'CSW'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.ogc.csw_xml')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'WMTS'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.ogc.wmts_xml')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'WPS'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.ogc.wps_xml')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'ATOM'">
+      <xsl:value-of select="concat($iana-mt, 'application/atom+xml')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'BIN'">
+      <xsl:value-of select="concat($iana-mt, 'application/octet-stream')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'CSS'">
+      <xsl:value-of select="concat($iana-mt, 'text/css')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'CSV'">
+      <xsl:value-of select="concat($iana-mt, 'text/csv')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'DBF'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.dbf')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'DOC'">
+      <xsl:value-of select="concat($iana-mt, 'application/msword')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'DOCX'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'DTD_XML'">
+      <xsl:value-of select="concat($iana-mt, 'application/xml-dtd')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'DWG'">
+      <xsl:value-of select="concat($iana-mt, 'image/vnd.dwg')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'DXF'">
+      <xsl:value-of select="concat($iana-mt, 'image/vnd.dxf')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'EPUB'">
+      <xsl:value-of select="concat($iana-mt, 'application/epub+zip')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'EXE'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.microsoft.portable-executable')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'GEOJSON'">
+      <xsl:value-of select="concat($iana-mt, 'application/geo+json')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'GML'">
+      <xsl:value-of select="concat($iana-mt, 'application/gml+xml')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'GPKG'">
+      <xsl:value-of select="concat($iana-mt, 'application/geopackage+sqlite3')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'GZIP'">
+      <xsl:value-of select="concat($iana-mt, 'application/gzip')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'HTML'">
+      <xsl:value-of select="concat($iana-mt, 'text/html')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'JSON'">
+      <xsl:value-of select="concat($iana-mt, 'application/json')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'JSON_LD'">
+      <xsl:value-of select="concat($iana-mt, 'application/ld+json')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'KML'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.google-earth.kml+xml')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'LAS'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.las')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'LAZ'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.laszip')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'MBOX'">
+      <xsl:value-of select="concat($iana-mt, 'application/mbox')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'METS'">
+      <xsl:value-of select="concat($iana-mt, 'application/mets+xml')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'MOBI'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.amazon.mobi8-ebook')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'MP3'">
+      <xsl:value-of select="concat($iana-mt, 'audio/mpeg')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'MPEG4'">
+      <xsl:value-of select="concat($iana-mt, 'application/mp4')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'N3'">
+      <xsl:value-of select="concat($iana-mt, 'text/n3')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'ODT'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.oasis.opendocument.text')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'OWL'">
+      <xsl:value-of select="concat($iana-mt, 'application/rdf+xml')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'PDF'">
+      <xsl:value-of select="concat($iana-mt, 'application/pdf')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'PNG'">
+      <xsl:value-of select="concat($iana-mt, 'image/png')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'PPT'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.ms-powerpoint')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'PPTX'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.openxmlformats-officedocument.presentationml.presentation')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'RAR'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.rar')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'RDF'">
+      <xsl:value-of select="concat($iana-mt, 'application/rdf+xml')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'RDF_N_TRIPLES'">
+      <xsl:value-of select="concat($iana-mt, 'application/n-triples')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'RDF_TURTLE'">
+      <xsl:value-of select="concat($iana-mt, 'text/turtle')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'RTF'">
+      <xsl:value-of select="concat($iana-mt, 'application/rtf')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'SHP'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.shp')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'SQL'">
+      <xsl:value-of select="concat($iana-mt, 'application/sql')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'SVG'">
+      <xsl:value-of select="concat($iana-mt, 'image/svg+xml')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'TIFF'">
+      <xsl:value-of select="concat($iana-mt, 'image/tiff')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'TSV'">
+      <xsl:value-of select="concat($iana-mt, 'text/tab-separated-values')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'TTL'">
+      <xsl:value-of select="concat($iana-mt, 'text/turtle')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'TXT'">
+      <xsl:value-of select="concat($iana-mt, 'text/plain')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'XLS'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.ms-excel')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'XLSX'">
+      <xsl:value-of select="concat($iana-mt, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'XML'">
+      <xsl:value-of select="concat($iana-mt, 'text/xml')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'XSLT'">
+      <xsl:value-of select="concat($iana-mt, 'application/xslt+xml')"/>
+    </xsl:when>
+    <xsl:when test="$protocol = 'ZIP'">
+      <xsl:value-of select="concat($iana-mt, 'application/zip')"/>
+    </xsl:when>
+    <!-- Add more mappings here as needed -->
+    <xsl:otherwise>
+      <xsl:value-of select="concat($iana-mt, 'application/', translate($protocol, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'))"/>
+    </xsl:otherwise>
+  </xsl:choose>
+</xsl:template>
 
 </xsl:transform>
