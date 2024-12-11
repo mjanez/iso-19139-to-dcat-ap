@@ -1031,12 +1031,6 @@
         </xsl:apply-templates>
 -->
       </xsl:if>
-<!-- Metadata file identifier (tentative): only for the extended profile -->
-      <xsl:if test="$profile = $extended">
-        <xsl:for-each select="gmd:fileIdentifier/gco:CharacterString">
-          <dct:identifier rdf:datatype="{$xsd}string"><xsl:value-of select="."/></dct:identifier>
-        </xsl:for-each>
-      </xsl:if>
 <!-- Metadata standard (tentative): only for the extended profile -->
 <!-- Mapping moved to core profile for compliance with DCAT-AP 2 -->
 <!--
@@ -1183,6 +1177,12 @@
       <xsl:for-each select="gmd:identificationInfo/*/gmd:resourceMaintenance">
         <xsl:apply-templates select="gmd:MD_MaintenanceInformation/gmd:maintenanceAndUpdateFrequency/gmd:MD_MaintenanceFrequencyCode"/>
       </xsl:for-each>
+<!-- Metadata file identifier (tentative): only for the extended profile -->
+      <xsl:if test="$profile = $extended">
+        <xsl:for-each select="gmd:fileIdentifier/gco:CharacterString">
+          <dct:identifier rdf:datatype="{$xsd}string"><xsl:value-of select="."/></dct:identifier>
+        </xsl:for-each>
+      </xsl:if>
 <!-- Topic category -->
       <xsl:if test="$profile = $extended">
         <xsl:apply-templates select="gmd:identificationInfo/*/gmd:topicCategory">
