@@ -75,7 +75,7 @@ To configure the script, you need to create a `config.yaml` file based on the pr
 
 - `xsl_url`: The URL to the XSLT transformation or the local XSLT file path. Example:
   ```yaml
-  xsl_url: https://raw.githubusercontent.com/mjanez/iso-19139-to-dcat-ap/refs/heads/develop/iso-19139-to-dcat-ap.xsl
+  xsl_url: https://raw.githubusercontent.com/SEMICeu/iso-19139-to-dcat-ap/refs/heads/main/iso-19139-to-dcat-ap.xsl
   ```
 
 ### Running the script
