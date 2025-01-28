@@ -57,47 +57,70 @@ class XSLTTransformer:
         log.debug("XSLTTransformer initialized successfully.")
 
     def transform(self, xml_data):
-        """Transforms the given XML data using the XSLT file.
-
-        Args:
-            xml_data (str or bytes): The XML data to transform.
-
-        Returns:
-            str: The transformed RDF data.
-
-        Raises:
-            RuntimeError: If there is an error in the XSLT transformation.
-            Exception: If there is a general error during transformation.
-        """
+        """Transforms the given XML data using the XSLT file."""
         log.debug("Starting XML transformation.")
         try:
             if isinstance(xml_data, bytes):
                 xml_data = xml_data.decode('utf-8')
-
+    
+            # Create output directory
+            output_dir = os.path.join(os.path.dirname(__file__), 'output')
+            os.makedirs(output_dir, exist_ok=True)
+    
+            # Save original XML content
+            xml_file_path = os.path.join(output_dir, 'input_raw.xml')
+            with open(xml_file_path, 'w', encoding='utf-8') as xml_file:
+                xml_file.write(xml_data)
+    
+            # Configure Saxon processor
+            self.processor = PySaxonProcessor(license=False)
+            self.xslt_processor = self.processor.new_xslt30_processor()
+            
+            # Set parameters to prevent URL resolution
+            self.xslt_processor.set_parameter("resolve-external", self.processor.make_boolean_value(False))
+            self.xslt_processor.set_cwd(os.path.dirname(self.xslt_path))
+    
+            # Create temporary file for transformation
             with tempfile.NamedTemporaryFile(delete=False, suffix=".xml", mode='w', encoding='utf-8') as temp_file:
                 temp_file.write(xml_data)
                 temp_file_path = temp_file.name
-
+    
+            # Perform transformation with detailed logging
+            log.debug(f"Starting XSLT transformation with:\n  Source: {temp_file_path}\n  XSLT: {self.xslt_path}")
+            
             result = self.xslt_processor.transform_to_string(
                 stylesheet_file=self.xslt_path,
                 source_file=temp_file_path
             )
+            
+            # Add parameters to prevent URL resolution
+            self.xslt_processor.set_parameter("resolve-external", self.processor.make_boolean_value(False))
+            
+            result = self.xslt_processor.transform_to_string(
+                stylesheet_file=self.xslt_path,
+                source_file=temp_file_path
+            )
+    
             if self.xslt_processor.exception_occurred:
                 for error in self.xslt_processor.get_error_message():
                     log.error("Error in XSLT transformation: %s", error)
                 raise RuntimeError("Error in XSLT transformation")
-
-            # Save the result to a file in the output directory
-            output_dir = os.path.join(os.path.dirname(__file__), 'output')
-            os.makedirs(output_dir, exist_ok=True)
+    
+            # Save the result
             output_file_path = os.path.join(output_dir, 'transformed_output.rdf')
             with open(output_file_path, 'w', encoding='utf-8') as output_file:
                 output_file.write(result)
-
+    
             log.debug("XML transformation completed successfully. Result saved in %s", output_file_path)
             return result
+    
         except Exception as e:
-            log.error("Failed to transform XML content: %s", e)
+            log.error("Failed to transform XML content: %s", str(e))
+            # Save error details for debugging
+            error_path = os.path.join(output_dir, 'transformation_error.log')
+            with open(error_path, 'w', encoding='utf-8') as error_file:
+                error_file.write(f"Error: {str(e)}\n")
+                error_file.write(f"XML content preview:\n{xml_data[:1000]}...")
             raise
 
 # Create an unverified SSL context
