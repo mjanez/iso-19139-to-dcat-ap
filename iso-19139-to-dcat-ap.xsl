@@ -56,6 +56,7 @@
     xmlns:cnt    = "http://www.w3.org/2011/content#"
     xmlns:dc     = "http://purl.org/dc/elements/1.1/"
     xmlns:dcat   = "http://www.w3.org/ns/dcat#"
+    xmlns:dcatap = "http://data.europa.eu/r5r/"
     xmlns:dct    = "http://purl.org/dc/terms/"
     xmlns:dctype = "http://purl.org/dc/dcmitype/"
     xmlns:dqv    = "http://www.w3.org/ns/dqv#"
@@ -69,6 +70,7 @@
     xmlns:gsp    = "http://www.opengis.net/ont/geosparql#"
     xmlns:i      = "http://inspire.ec.europa.eu/schemas/common/1.0"
     xmlns:i-gp   = "http://inspire.ec.europa.eu/schemas/geoportal/1.0"
+    xmlns:local  = "urn:local"
     xmlns:locn   = "http://www.w3.org/ns/locn#"
     xmlns:owl    = "http://www.w3.org/2002/07/owl#"
     xmlns:org    = "http://www.w3.org/ns/org#"
@@ -408,6 +410,51 @@
 
 <!--
 
+  Helper Functions
+  ================
+
+-->
+
+  <!-- 
+    Function to extract text content from ISO 19139 multilingual elements.
+    Handles three patterns:
+    1. gmx:Anchor - returns the text content
+    2. gco:CharacterString - returns the text content  
+    3. gmd:PT_FreeText with LocalisedCharacterStrings - returns English text if available, otherwise first available
+  -->
+  <xsl:function name="local:getTextContent">
+    <xsl:param name="element"/>
+    <xsl:choose>
+      <!-- Handle gmx:Anchor -->
+      <xsl:when test="$element/gmx:Anchor">
+        <xsl:value-of select="normalize-space($element/gmx:Anchor)"/>
+      </xsl:when>
+      <!-- Handle gco:CharacterString -->
+      <xsl:when test="$element/gco:CharacterString">
+        <xsl:value-of select="normalize-space($element/gco:CharacterString)"/>
+      </xsl:when>
+      <!-- Handle PT_FreeText with LocalisedCharacterStrings -->
+      <xsl:when test="$element/gmd:PT_FreeText/gmd:textGroup/gmd:LocalisedCharacterString">
+        <xsl:choose>
+          <!-- Try to find English locale first -->
+          <xsl:when test="$element/gmd:PT_FreeText/gmd:textGroup/gmd:LocalisedCharacterString[@locale='#locale-en']">
+            <xsl:value-of select="normalize-space($element/gmd:PT_FreeText/gmd:textGroup/gmd:LocalisedCharacterString[@locale='#locale-en'][1])"/>
+          </xsl:when>
+          <!-- Otherwise use the first available LocalisedCharacterString -->
+          <xsl:otherwise>
+            <xsl:value-of select="normalize-space($element/gmd:PT_FreeText/gmd:textGroup/gmd:LocalisedCharacterString[1])"/>
+          </xsl:otherwise>
+        </xsl:choose>
+      </xsl:when>
+      <!-- Fallback to normalize-space of all child elements (backward compatibility) -->
+      <xsl:otherwise>
+        <xsl:value-of select="normalize-space($element/*)"/>
+      </xsl:otherwise>
+    </xsl:choose>
+  </xsl:function>
+
+<!--
+
   Master template
   ===============
 
@@ -732,6 +779,17 @@
         </dct:description>
         <xsl:call-template name="LocalisedString">
           <xsl:with-param name="term">dct:description</xsl:with-param>
+        </xsl:call-template>
+      </xsl:for-each>
+    </xsl:param>
+
+    <xsl:param name="ResourcePurpose">
+      <xsl:for-each select="gmd:identificationInfo[1]/*/gmd:purpose">
+        <geodcatap:purpose xml:lang="{$MetadataLanguage}">
+          <xsl:value-of select="normalize-space(gco:CharacterString)"/>
+        </geodcatap:purpose>
+        <xsl:call-template name="LocalisedString">
+          <xsl:with-param name="term">geodcatap:purpose</xsl:with-param>
         </xsl:call-template>
       </xsl:for-each>
     </xsl:param>
@@ -1179,6 +1237,7 @@
       </dct:description>
 -->
       <xsl:copy-of select="$ResourceAbstract"/>
+      <xsl:copy-of select="$ResourcePurpose"/>
 <!-- Maintenance information (tentative) -->
       <xsl:for-each select="gmd:identificationInfo/*/gmd:resourceMaintenance">
         <xsl:apply-templates select="gmd:MD_MaintenanceInformation/gmd:maintenanceAndUpdateFrequency/gmd:MD_MaintenanceFrequencyCode"/>
@@ -1714,10 +1773,10 @@
     <xsl:param name="Address">
       <xsl:for-each select="gmd:contactInfo/gmd:CI_Contact/gmd:address/gmd:CI_Address">
         <xsl:variable name="deliveryPoint" select="normalize-space(string-join(gmd:deliveryPoint/*, ' '))"/>
-        <xsl:variable name="city" select="normalize-space(gmd:city/*)"/>
-        <xsl:variable name="administrativeArea" select="normalize-space(gmd:administrativeArea/*)"/>
-        <xsl:variable name="postalCode" select="normalize-space(gmd:postalCode/*)"/>
-        <xsl:variable name="country" select="normalize-space(gmd:country/*)"/>
+        <xsl:variable name="city" select="local:getTextContent(gmd:city)"/>
+        <xsl:variable name="administrativeArea" select="local:getTextContent(gmd:administrativeArea)"/>
+        <xsl:variable name="postalCode" select="local:getTextContent(gmd:postalCode)"/>
+        <xsl:variable name="country" select="local:getTextContent(gmd:country)"/>
         <xsl:if test="$deliveryPoint != '' or $city != '' or $administrativeArea != '' or $postalCode != '' or $country != ''">
           <locn:address>
             <locn:Address>
@@ -1745,10 +1804,10 @@
     <xsl:param name="Address-vCard">
       <xsl:for-each select="gmd:contactInfo/gmd:CI_Contact/gmd:address/gmd:CI_Address">
         <xsl:variable name="deliveryPoint" select="normalize-space(string-join(gmd:deliveryPoint/*, ' '))"/>
-        <xsl:variable name="city" select="normalize-space(gmd:city/*)"/>
-        <xsl:variable name="administrativeArea" select="normalize-space(gmd:administrativeArea/*)"/>
-        <xsl:variable name="postalCode" select="normalize-space(gmd:postalCode/*)"/>
-        <xsl:variable name="country" select="normalize-space(gmd:country/*)"/>
+        <xsl:variable name="city" select="local:getTextContent(gmd:city)"/>
+        <xsl:variable name="administrativeArea" select="local:getTextContent(gmd:administrativeArea)"/>
+        <xsl:variable name="postalCode" select="local:getTextContent(gmd:postalCode)"/>
+        <xsl:variable name="country" select="local:getTextContent(gmd:country)"/>
         <xsl:if test="$deliveryPoint != '' or $city != '' or $administrativeArea != '' or $postalCode != '' or $country != ''">
           <vcard:hasAddress>
             <vcard:Address>
@@ -3091,34 +3150,34 @@
             </xsl:when>
 <!-- In case the concept's URI is provided -->
             <xsl:when test="gmx:Anchor/@xlink:href">
+              
               <xsl:choose>
-                <xsl:when test="$ResourceType != 'service'">
-                  <dcat:theme rdf:resource="{gmx:Anchor/@xlink:href}"/>
-<!--
-                  <skos:Concept rdf:about="{gmx:Anchor/@xlink:href}">
-                    <skos:prefLabel xml:lang="{$MetadataLanguage}">
-                      <xsl:value-of select="gmx:Anchor"/>
-                    </skos:prefLabel>
-                    <skos:inScheme>
-                      <skos:ConceptScheme>
-                        <xsl:copy-of select="$OriginatingControlledVocabulary"/>
-                      </skos:ConceptScheme>
-                    </skos:inScheme>
-                  </skos:Concept>
--->
+                <!-- HVD applicable legislation -->
+                <xsl:when test="gmx:Anchor/@xlink:href = 'http://data.europa.eu/eli/reg_impl/2023/138/oj'">
+                  <dcatap:applicableLegislation rdf:resource="{gmx:Anchor/@xlink:href}"/>
                 </xsl:when>
+                
+                <!-- HVD Category -->
+                <xsl:when test="../gmd:thesaurusName/gmd:CI_Citation/gmd:title/gmx:Anchor/@xlink:href = 'http://data.europa.eu/bna/asd487ae75'">
+                  <dcatap:hvdCategory rdf:resource="{gmx:Anchor/@xlink:href}"/>
+                </xsl:when>
+
+                <!-- Regular dcat:theme -->
                 <xsl:otherwise>
-<!-- Mapping moved to core profile for compliance with DCAT-AP 2 -->
-<!-- Mapping added for compliance with DCAT-AP 2 -->
                   <dcat:theme rdf:resource="{gmx:Anchor/@xlink:href}"/>
-                  <xsl:if test="$profile = $extended">
-<!-- DEPRECATED: Mapping kept for backward compatibility with GeoDCAT-AP v1.* -->
-                    <xsl:if test="$include-deprecated = 'yes'">
-                      <dct:subject rdf:resource="{gmx:Anchor/@xlink:href}"/>
-                    </xsl:if>
-                  </xsl:if>
                 </xsl:otherwise>
               </xsl:choose>
+              
+              <xsl:if test="$ResourceType = 'service'">
+<!-- Mapping moved to core profile for compliance with DCAT-AP 2 -->
+<!-- Mapping added for compliance with DCAT-AP 2 -->
+                <xsl:if test="$profile = $extended">
+<!-- DEPRECATED: Mapping kept for backward compatibility with GeoDCAT-AP v1.* -->
+                  <xsl:if test="$include-deprecated = 'yes'">
+                    <dct:subject rdf:resource="{gmx:Anchor/@xlink:href}"/>
+                  </xsl:if>
+                </xsl:if>
+              </xsl:if>
             </xsl:when>
           </xsl:choose>
         </xsl:otherwise>
@@ -3843,6 +3902,10 @@
 -->
             <xsl:value-of select="concat($opfq,'BIWEEKLY')"/>
           </xsl:when>
+          <xsl:when test="@codeListValue = 'semimonthly'">
+<!--  A mapping is missing in Dublin Core -->
+            <xsl:value-of select="concat($opfq,'MONTHLY_2')"/>
+          </xsl:when>
           <xsl:when test="@codeListValue = 'monthly'">
 <!--  DC Freq voc
             <xsl:value-of select="concat($cldFrequency,'monthly')"/>
@@ -3866,6 +3929,14 @@
             <xsl:value-of select="concat($cldFrequency,'annual')"/>
 -->
             <xsl:value-of select="concat($opfq,'ANNUAL')"/>
+          </xsl:when>
+          <xsl:when test="@codeListValue = 'biennially'">
+<!--  A mapping is missing in Dublin Core -->
+            <xsl:value-of select="concat($opfq,'BIENNIAL')"/>
+          </xsl:when>
+          <xsl:when test="@codeListValue = 'periodic'">
+<!--  A mapping is missing in Dublin Core -->
+            <xsl:value-of select="concat($opfq,'OTHER')"/>
           </xsl:when>
           <xsl:when test="@codeListValue = 'asNeeded'">
 <!--  A mapping is missing in Dublin Core -->
@@ -4084,7 +4155,7 @@
       <xsl:variable name="value" select="normalize-space(.)"/>
       <xsl:variable name="langs">
         <xsl:call-template name="Alpha3-to-Alpha2">
-          <xsl:with-param name="lang" select="translate(translate(@locale, $uppercase, $lowercase), '#', '')"/>
+          <xsl:with-param name="lang" select="substring-after(translate(translate(@locale, $uppercase, $lowercase), '#', ''), 'locale-')"/>
         </xsl:call-template>
       </xsl:variable>
       <xsl:if test="$value != ''">

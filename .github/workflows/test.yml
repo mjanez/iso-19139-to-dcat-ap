@@ -1,0 +1,181 @@
+name: XSLT Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  # Job to discover available test cases
+  discover-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      test-count: ${{ steps.count.outputs.test-count }}
+      test-list: ${{ steps.list.outputs.test-list }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Count test cases
+      id: count
+      run: |
+        cd tests
+        TEST_COUNT=$(find test-cases -maxdepth 1 -type d | grep -v "^test-cases$" | wc -l)
+        echo "test-count=$TEST_COUNT" >> $GITHUB_OUTPUT
+        echo "Found $TEST_COUNT test case(s)"
+    
+    - name: List test cases
+      id: list
+      run: |
+        cd tests
+        TEST_LIST=$(find test-cases -maxdepth 1 -type d | grep -v "^test-cases$" | sed 's|test-cases/||' | tr '\n' ',' | sed 's/,$//')
+        echo "test-list=$TEST_LIST" >> $GITHUB_OUTPUT
+        echo "Test cases: $TEST_LIST"
+
+  # Validation job to ensure test artifacts are valid
+  validate-test-fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Install xmllint
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends libxml2-utils
+      env:
+        DEBIAN_FRONTEND: noninteractive
+    
+    - name: Validate XML test fixtures
+      run: |
+        echo "Validating input XML files..."
+        find tests/test-cases -name "input.xml" -exec xmllint --noout {} \;
+        echo "Validating expected output XML files..."
+        find tests/test-cases -name "expected_output.xml" -exec xmllint --noout {} \;
+        echo "All XML files are well-formed!"
+    
+    - name: Validate JSON configuration files
+      run: |
+        echo "Validating JSON configuration files..."
+        find tests/test-cases -name "config.json" -exec python -m json.tool {} \; > /dev/null
+        echo "All JSON files are valid!"
+  
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [discover-tests, validate-test-fixtures]
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('tests/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r tests/requirements.txt
+    
+    - name: Run XSLT tests
+      run: |
+        cd tests
+        echo "Running tests for ${{ needs.discover-tests.outputs.test-count }} test case(s): ${{ needs.discover-tests.outputs.test-list }}"
+        python run_tests.py --verbose --report test_report.txt
+    
+    
+    - name: Display test results and generate coverage summary
+      if: always()
+      run: |
+        cd tests
+        echo "Test Report:"
+        cat test_report.txt || echo "No test report found"
+        
+        # Generate enhanced summary with coverage information
+        echo "" > enhanced_summary.md
+        echo "# Test Coverage Summary" >> enhanced_summary.md
+        echo "" >> enhanced_summary.md
+        echo "Generated on: $(date)" >> enhanced_summary.md
+        echo "" >> enhanced_summary.md
+        
+        # Extract test case results from report
+        echo "## Test Cases" >> enhanced_summary.md
+        if [ -f test_report.txt ]; then
+          # Look for the detailed results section and extract test results
+          sed -n '/DETAILED RESULTS:/,$ p' test_report.txt | grep -E "^[^:]+: (PASS|FAIL)" > test_results.tmp
+          
+          while IFS= read -r line; do
+            test_name=$(echo "$line" | cut -d: -f1)
+            status_with_time=$(echo "$line" | cut -d: -f2 | tr -d ' ')
+            status=$(echo "$status_with_time" | cut -d'(' -f1)
+            time_info=$(echo "$status_with_time" | grep -o '([^)]*)')
+            
+            if [ "$status" = "PASS" ]; then
+              echo "- $test_name: ✅ $time_info" >> enhanced_summary.md
+            elif [ "$status" = "FAIL" ]; then
+              echo "- $test_name: ❌ $time_info" >> enhanced_summary.md
+            else
+              echo "- $test_name: ⚠️ (Status: '$status')" >> enhanced_summary.md
+            fi
+          done < test_results.tmp
+          rm -f test_results.tmp
+          
+          # Add summary statistics from the report
+          echo "" >> enhanced_summary.md
+          echo "## Test Statistics" >> enhanced_summary.md
+          
+          total_discovered=$(grep "Total discovered:" test_report.txt | cut -d: -f2 | tr -d ' ' || echo "Unknown")
+          tests_run=$(grep "Tests run:" test_report.txt | cut -d: -f2 | tr -d ' ' || echo "Unknown") 
+          passed=$(grep "Passed:" test_report.txt | cut -d: -f2 | tr -d ' ' || echo "Unknown")
+          failed=$(grep "Failed:" test_report.txt | cut -d: -f2 | tr -d ' ' || echo "Unknown")
+          skipped=$(grep "Skipped:" test_report.txt | cut -d: -f2 | tr -d ' ' || echo "0")
+          
+          echo "- **Total discovered**: $total_discovered" >> enhanced_summary.md
+          echo "- **Tests run**: $tests_run" >> enhanced_summary.md  
+          echo "- **Passed**: $passed" >> enhanced_summary.md
+          echo "- **Failed**: $failed" >> enhanced_summary.md
+          echo "- **Skipped**: $skipped" >> enhanced_summary.md
+        else
+          echo "- Tests status: ⚠️ (Test report not found)" >> enhanced_summary.md
+        fi
+        
+        echo "" >> enhanced_summary.md
+        echo "## Test Configuration" >> enhanced_summary.md
+        echo "- **Environment**: Python 3.12 on Ubuntu Latest" >> enhanced_summary.md
+        echo "- **XSLT Processor**: Saxon-HE" >> enhanced_summary.md
+        echo "- **Test Approach**: Each test case uses individual config.json settings" >> enhanced_summary.md
+        echo "- **Validation**: Semantic RDF graph comparison (XML and Turtle formats)" >> enhanced_summary.md
+        
+        # Add both reports to GitHub Actions job summary
+        echo "## Test Report" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        cat test_report.txt >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        cat enhanced_summary.md >> $GITHUB_STEP_SUMMARY
+        
+    - name: Upload enhanced test reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-reports
+        path: |
+          tests/test_report.txt
+          tests/enhanced_summary.md
+        compression-level: 9
